@@ -17,3 +17,6 @@ data object WellbeingDestination : NavKey
 
 @Serializable
 data object SettingsDestination : NavKey
+
+@Serializable
+data class NoteDestination(val id: String, val isNew: Boolean = false) : NavKey

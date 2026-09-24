@@ -1,219 +1,104 @@
 package com.dragonpi.timegem.feature.setup
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Bedtime
-import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.ColorLens
-import androidx.compose.material.icons.rounded.Repeat
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dragonpi.timegem.R
-import com.dragonpi.timegem.data.preferences.SetupChoices
+import com.dragonpi.timegem.data.preferences.*
+import com.dragonpi.timegem.feature.settings.AppearanceControls
+import com.dragonpi.timegem.feature.settings.SettingSwitch
 
 @Composable
 fun SetupScreen(
+    appearance: Appearance,
+    onAppearanceChange: (Appearance) -> Unit,
+    saving: Boolean,
     onFinish: (SetupChoices) -> Unit,
 ) {
-    var calendarEnabled by rememberSaveable { mutableStateOf(true) }
-    var routinesEnabled by rememberSaveable { mutableStateOf(true) }
-    var wellbeingEnabled by rememberSaveable { mutableStateOf(true) }
-    var reflectionsEnabled by rememberSaveable { mutableStateOf(true) }
-    var dynamicColorEnabled by rememberSaveable { mutableStateOf(false) }
-
-    Scaffold { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Image(
-                painter = painterResource(R.drawable.ic_time_gem_logo),
-                contentDescription = "Time Gem logo",
-                modifier = Modifier.size(112.dp),
-            )
-
-            Spacer(Modifier.height(18.dp))
-
-            Text(
-                text = "Make Time Gem yours",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-            )
-
-            Text(
-                text = "Notes are always at the center. Pick the extra tools you want around them. You can change everything later.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 8.dp, bottom = 24.dp),
-            )
-
-            FeatureChoice(
-                icon = Icons.Rounded.CalendarMonth,
-                title = "Calendar & events",
-                description = "Plan days, birthdays, holidays and reminders.",
-                checked = calendarEnabled,
-                onCheckedChange = { calendarEnabled = it },
-            )
-            FeatureChoice(
-                icon = Icons.Rounded.Repeat,
-                title = "Routines & goals",
-                description = "Build repeatable student and daily-life workflows.",
-                checked = routinesEnabled,
-                onCheckedChange = { routinesEnabled = it },
-            )
-            FeatureChoice(
-                icon = Icons.Rounded.Bedtime,
-                title = "Sleep & focus",
-                description = "Use intentional nudges to stop doom-scrolling and wind down.",
-                checked = wellbeingEnabled,
-                onCheckedChange = { wellbeingEnabled = it },
-            )
-            FeatureChoice(
-                icon = Icons.Rounded.CheckCircle,
-                title = "Daily & weekly reflections",
-                description = "Track mood, progress and what actually worked.",
-                checked = reflectionsEnabled,
-                onCheckedChange = { reflectionsEnabled = it },
-            )
-            FeatureChoice(
-                icon = Icons.Rounded.ColorLens,
-                title = "Use Material You colors",
-                description = "Off keeps Time Gem's yellow identity. On follows your wallpaper colors.",
-                checked = dynamicColorEnabled,
-                onCheckedChange = { dynamicColorEnabled = it },
-            )
-
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                ),
-                shape = RoundedCornerShape(24.dp),
-            ) {
-                Text(
-                    text = "Private by default: these choices are stored locally on your device. Time Gem does not need an account to become useful.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(18.dp),
-                )
+    var step by rememberSaveable { mutableIntStateOf(0) }
+    var calendar by rememberSaveable { mutableStateOf(true) }
+    var routines by rememberSaveable { mutableStateOf(true) }
+    var wellbeing by rememberSaveable { mutableStateOf(true) }
+    var reflections by rememberSaveable { mutableStateOf(true) }
+    BackHandler(step > 0) { step = 0 }
+    Scaffold(
+        contentWindowInsets = WindowInsets.safeDrawing,
+        bottomBar = {
+            Surface(color = MaterialTheme.colorScheme.surface) {
+                Box(Modifier.fillMaxWidth().navigationBarsPadding(), contentAlignment = Alignment.Center) {
+                    Row(
+                        Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        if (step > 0) IconButton(onClick = { step = 0 }, enabled = !saving) {
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back")
+                        }
+                        Button(
+                            onClick = {
+                                if (step == 0) step = 1
+                                else onFinish(SetupChoices(calendar, routines, wellbeing, reflections))
+                            },
+                            enabled = !saving,
+                            modifier = Modifier.weight(1f).heightIn(min = 52.dp),
+                        ) { Text(if (saving) "Saving…" else if (step == 0) "Continue" else "Start using Time Gem") }
+                    }
+                }
             }
-
-            Button(
-                onClick = {
-                    onFinish(
-                        SetupChoices(
-                            calendarEnabled = calendarEnabled,
-                            routinesEnabled = routinesEnabled,
-                            wellbeingEnabled = wellbeingEnabled,
-                            reflectionsEnabled = reflectionsEnabled,
-                            dynamicColorEnabled = dynamicColorEnabled,
-                        )
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 24.dp),
-            ) {
-                Text("Start using Time Gem")
+        },
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding), contentAlignment = Alignment.TopCenter) {
+            AnimatedContent(
+                targetState = step,
+                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                label = "setup_page",
+            ) { page ->
+                Column(
+                    Modifier.widthIn(max = 640.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Text(if (page == 0) "1 of 2 · Your space" else "2 of 2 · Appearance", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    LinearProgressIndicator(progress = { if (page == 0) 0.5f else 1f }, modifier = Modifier.fillMaxWidth())
+                    if (page == 0) {
+                        Image(painterResource(R.drawable.ic_time_gem_logo), contentDescription = null, modifier = Modifier.size(64.dp))
+                        Text("Make Time Gem yours", style = MaterialTheme.typography.headlineMedium)
+                        Text("Start with notes. Choose which other spaces you want to see.", style = MaterialTheme.typography.bodyLarge)
+                        Text("The extra tools are still being built. You can change these choices in Settings.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Column {
+                            SettingSwitch("Calendar", "Events and important dates.", calendar) { calendar = it }
+                            HorizontalDivider()
+                            SettingSwitch("Routines", "Daily habits and goals.", routines) { routines = it }
+                            HorizontalDivider()
+                            SettingSwitch("Sleep & focus", "Make room for rest.", wellbeing) { wellbeing = it }
+                            HorizontalDivider()
+                            SettingSwitch("Reflections", "Look back on your day and week.", reflections) { reflections = it }
+                        }
+                        Text("Notes are always available.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        Text("Find your colors", style = MaterialTheme.typography.headlineMedium)
+                        Text("Preview your theme here. Change it anytime in Settings.", style = MaterialTheme.typography.bodyLarge)
+                        AppearanceControls(appearance, onAppearanceChange)
+                        HorizontalDivider()
+                        Text("Your space, on your device", style = MaterialTheme.typography.titleMedium)
+                        Text("No account needed. Notes and preferences are saved locally.", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
             }
-
-            Text(
-                text = "You can change these choices later in Settings.",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 12.dp, bottom = 20.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun FeatureChoice(
-    icon: ImageVector,
-    title: String,
-    description: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 10.dp)
-            .clickable { onCheckedChange(!checked) },
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp),
-            )
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-            )
         }
     }
 }
