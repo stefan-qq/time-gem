@@ -14,6 +14,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.dragonpi.timegem.data.notes.*
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -169,7 +170,7 @@ fun NoteEditorScreen(
                         Box { if (title.isEmpty()) Text("Title", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant); field() }
                     })
                 BasicTextField(body, { body = it.take(100_000) }, modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp).focusRequester(focus).semantics { contentDescription = "Note" },
-                    readOnly = busy, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                    readOnly = busy, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface, letterSpacing = 0.sp),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), decorationBox = { field ->
                         Box { if (body.isEmpty()) Text("Note", color = MaterialTheme.colorScheme.onSurfaceVariant); field() }
                     })

@@ -35,13 +35,18 @@ fun TimeGemNavigation(
     onNewNoteHandled: () -> Unit = {},
 ) {
     var noteOrigin by remember { mutableStateOf(androidx.compose.ui.graphics.TransformOrigin.Center) }
+    var removedNote by remember { mutableStateOf<Note?>(null) }
+    var noteTransition by remember { mutableStateOf(false) }
     val backStack = rememberNavBackStack(HomeDestination)
     val notesState by notesViewModel.state.collectAsStateWithLifecycle()
     val saving by notesViewModel.saving.collectAsStateWithLifecycle()
     val noteError by notesViewModel.error.collectAsStateWithLifecycle()
     fun back() { if (backStack.size > 1) backStack.removeLastOrNull() }
     fun open(destination: NavKey) {
-        if (backStack.lastOrNull() != destination) backStack.add(destination)
+        if (backStack.lastOrNull() != destination) {
+            noteTransition = destination is NoteDestination
+            backStack.add(destination)
+        }
     }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(notesViewModel) { notesViewModel.messages.collectLatest { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(it) } }
@@ -57,14 +62,25 @@ fun TimeGemNavigation(
     NavDisplay(
         backStack = backStack,
         onBack = { if (!saving) back() },
-        transitionSpec = { (fadeIn(tween(230)) + scaleIn(tween(300), initialScale = 0.88f, transformOrigin = noteOrigin)) togetherWith ExitTransition.None },
-        popTransitionSpec = { EnterTransition.None togetherWith (fadeOut(tween(210)) + scaleOut(tween(280), targetScale = 0.88f, transformOrigin = noteOrigin)) },
-        predictivePopTransitionSpec = { _ -> EnterTransition.None togetherWith (fadeOut(tween(210)) + scaleOut(tween(280), targetScale = 0.88f, transformOrigin = noteOrigin)) },
+        transitionSpec = {
+            if (noteTransition) (fadeIn(tween(220)) + scaleIn(tween(340), initialScale = 0.8f, transformOrigin = noteOrigin)) togetherWith ExitTransition.None
+            else slideInHorizontally(tween(300)) { it } togetherWith slideOutHorizontally(tween(300)) { -it / 4 }
+        },
+        popTransitionSpec = {
+            if (noteTransition) (fadeIn(tween(340)) togetherWith (fadeOut(tween(240, delayMillis = 80)) + scaleOut(tween(340), targetScale = 0.8f, transformOrigin = noteOrigin))).apply { targetContentZIndex = -1f }
+            else slideInHorizontally(tween(300)) { -it / 4 } togetherWith slideOutHorizontally(tween(300)) { it }
+        },
+        predictivePopTransitionSpec = { _ ->
+            if (noteTransition) (fadeIn(tween(340)) togetherWith (fadeOut(tween(240, delayMillis = 80)) + scaleOut(tween(340), targetScale = 0.8f, transformOrigin = noteOrigin))).apply { targetContentZIndex = -1f }
+            else slideInHorizontally(tween(300)) { -it / 4 } togetherWith slideOutHorizontally(tween(300)) { it }
+        },
         entryProvider = entryProvider {
             entry<HomeDestination> {
                 HomeScreen(
                     preferences = preferences,
                     notesState = notesState,
+                    removedNote = removedNote,
+                    onRemovalShown = { removedNote = null },
                     onRetry = notesViewModel::reload,
                     onCreateNote = { type -> noteOrigin = androidx.compose.ui.graphics.TransformOrigin(0.9f, 0.9f); notesViewModel.clearError(); open(NoteDestination(UUID.randomUUID().toString(), true, type)) },
                     onOpenNote = { note, x, y -> noteOrigin = androidx.compose.ui.graphics.TransformOrigin(x, y); notesViewModel.clearError(); open(NoteDestination(note.id)) },
@@ -93,7 +109,7 @@ fun TimeGemNavigation(
                         error = noteError,
                         askBeforeSaving = preferences.interactions.askBeforeSaving,
                         onSave = { notesViewModel.save(it, closeEditor) },
-                        onDelete = { notesViewModel.delete(destination.id, closeEditor) },
+                        onDelete = { notesViewModel.delete(destination.id) { removedNote = note; closeEditor() } },
                         onBack = closeEditor,
                     )
                 } else {

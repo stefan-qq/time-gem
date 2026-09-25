@@ -21,7 +21,7 @@ Available now:
 - Choose Time Gem colors, wallpaper-based Material You colors on Android 12+, or a preset palette. Follow device brightness or choose light/dark mode.
 - Customize visible workspaces, the Material You mascot and subtle haptics. Place search at the top or bottom; the wordmark adapts to available space. A brief time-of-day greeting welcomes you on opening.
 - First-run setup and offline Google Sans Flex typography.
-- Animated note transitions, grid rearrangement, a dimmed creation menu and swipe-dismissible in-app feedback.
+- Reversible note zoom transitions, directional workspace slides, animated deletion and grid rearrangement, a dimmed creation menu and swipe-dismissible in-app feedback. The compact navigation bar groups workspaces together.
 - Resizable icon-based quick-capture and latest-note home-screen widgets. Quick capture opens text, image or audio creation; latest note prioritizes pinned notes and opens the displayed note. Add it from Settings or your launcher's widget picker.
 
 Not implemented yet: checklists, drawing, reminders, calendar events, weekly planning, routines, sleep/focus tools, reflections, labels, archive, trash, sync and export. Cross-workspace search will expand as those workspaces become available.
@@ -47,7 +47,7 @@ adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 adb shell am instrument -w com.dragonpi.timegem.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-The instrumentation tests cover note persistence, database upgrades, attachment metadata, updates/deletion, setup layout, capture choices, audio layout, saving on exit, empty drafts, optional confirmation, cancelled back gestures, save retries and repeat-tap protection. Repository tests use separate test databases. Run `./gradlew testDebugUnitTest` for the sorting tests.
+The instrumentation tests cover note persistence, database upgrades, attachment metadata, updates/deletion, setup layout, capture choices, audio layout, saving on exit, empty drafts, optional confirmation, cancelled back gestures, save retries, repeat-tap protection, interrupted creation-menu animations, workspace round trips and the visible reverse note transition. Repository tests use separate test databases. Run `./gradlew testDebugUnitTest` for the sorting tests.
 
 ## License
 

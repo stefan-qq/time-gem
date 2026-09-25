@@ -4,14 +4,15 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 import com.dragonpi.timegem.data.preferences.NoteSort
 import com.dragonpi.timegem.data.notes.NoteColor
 import com.dragonpi.timegem.data.notes.AttachmentType
 import com.dragonpi.timegem.feature.notes.NoteImage
 import com.dragonpi.timegem.feature.notes.noteBackground
-import com.dragonpi.timegem.ui.theme.TimeGemWordmark
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,11 +24,8 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import com.dragonpi.timegem.data.preferences.ColorSource
 import com.dragonpi.timegem.ui.rememberGentleHaptic
 import androidx.compose.foundation.layout.*
@@ -68,7 +66,7 @@ private enum class Workspace(val title: String, val icon: ImageVector) {
     Week("Week", Icons.Rounded.DateRange),
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     preferences: TimeGemPreferences,
@@ -80,7 +78,13 @@ fun HomeScreen(
     onHomeOptionsChange: (HomeOptions) -> Unit,
     onRoutinesClick: () -> Unit,
     onWellbeingClick: () -> Unit,
+    removedNote: Note? = null,
+    onRemovalShown: () -> Unit = {},
 ) {
+    val density = LocalDensity.current
+    val ime = WindowInsets.ime
+    val systemNavigation = WindowInsets.navigationBars
+    fun keyboardOffset() = (ime.getBottom(density) - systemNavigation.getBottom(density)).coerceAtLeast(0)
     val hostView = LocalView.current
     val haptic = rememberGentleHaptic()
     val options = preferences.homeOptions
@@ -104,8 +108,21 @@ fun HomeScreen(
     var creationInfo by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(selected) { addMenuOpen = false }
     val gridState = rememberLazyStaggeredGridState()
-    val notes = (notesState as? NotesState.Ready)?.notes.orEmpty()
-    val filteredNotes = com.dragonpi.timegem.data.notes.orderNotes(notes.filter { note ->
+    var removingId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(removedNote?.id) {
+        if (removedNote != null) {
+            kotlinx.coroutines.delay(350)
+            removingId = removedNote.id
+            kotlinx.coroutines.delay(240)
+            onRemovalShown()
+            removingId = null
+        }
+    }
+    val storedNotes = (notesState as? NotesState.Ready)?.notes.orEmpty()
+    val notes = remember(storedNotes, removedNote) {
+        if (removedNote != null && storedNotes.none { it.id == removedNote.id }) storedNotes + removedNote else storedNotes
+    }
+    val filteredNotes = remember(notes, query, filter, options.sort) { com.dragonpi.timegem.data.notes.orderNotes(notes.filter { note ->
         (note.title.contains(query, ignoreCase = true) || note.body.contains(query, ignoreCase = true) || note.attachments.any { it.name.contains(query, ignoreCase = true) }) &&
             when (filter) {
                 "Pinned" -> note.pinned
@@ -114,7 +131,9 @@ fun HomeScreen(
                 "Colored" -> note.color != NoteColor.DEFAULT
                 else -> true
             }
-    }, options.sort)
+    }, options.sort) }
+    var homeCoordinates by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    var fabPosition by remember { mutableStateOf(IntOffset.Zero) }
     var presentedIds by rememberSaveable { mutableStateOf<List<String>?>(null) }
     val noteIds = filteredNotes.map { it.id }
     val notesById = filteredNotes.associateBy { it.id }
@@ -124,12 +143,22 @@ fun HomeScreen(
         withFrameNanos { }
         presentedIds = noteIds
     }
-    BackHandler(enabled = selected != Workspace.Notes || searchActive || query.isNotEmpty()) {
+    val imeVisible = WindowInsets.isImeVisible
+    var searchHadKeyboard by remember { mutableStateOf(false) }
+    LaunchedEffect(imeVisible, searchActive) {
+        if (searchActive && imeVisible) searchHadKeyboard = true
+        if (searchActive && searchHadKeyboard && !imeVisible) {
+            query = ""; searchActive = false; filter = "All"; focusManager.clearFocus()
+        }
+        if (!searchActive) searchHadKeyboard = false
+    }
+    BackHandler(addMenuOpen) { addMenuOpen = false }
+    BackHandler(enabled = !addMenuOpen && (selected != Workspace.Notes || searchActive || query.isNotEmpty())) {
         if (searchActive || query.isNotEmpty()) { query = ""; searchActive = false; filter = "All"; focusManager.clearFocus() }
         else selectedName = Workspace.Notes.name
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { homeCoordinates = it }) {
         val useRail = maxWidth >= 600.dp
         val searchBar: @Composable () -> Unit = {
                 HomeTopBar(
@@ -152,12 +181,12 @@ fun HomeScreen(
         Scaffold(
             topBar = { if (!options.bottomSearch) searchBar() },
             bottomBar = {
-                Column(Modifier.imePadding().then(if (useRail || workspaces.size == 1) Modifier.navigationBarsPadding() else Modifier)) {
+                Column(Modifier.offset { IntOffset(0, -keyboardOffset()) }.then(if (useRail || workspaces.size == 1) Modifier.navigationBarsPadding() else Modifier)) {
                 if (options.bottomSearch) searchBar()
                 if (!useRail && workspaces.size > 1) {
-                    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+                    ShortNavigationBar(modifier = Modifier.padding(horizontal = 12.dp), containerColor = MaterialTheme.colorScheme.surface, arrangement = ShortNavigationBarArrangement.Centered) {
                         workspaces.forEach { workspace ->
-                            NavigationBarItem(
+                            ShortNavigationBarItem(
                                 selected = selected == workspace,
                                 onClick = { if (selected != workspace) haptic(); selectedName = workspace.name },
                                 icon = { Icon(workspace.icon, contentDescription = null) },
@@ -169,39 +198,10 @@ fun HomeScreen(
             }
             },
             floatingActionButton = {
-                if (selected == Workspace.Notes) {
-                    Box {
-                        val rotation by animateFloatAsState(if (addMenuOpen) 45f else 0f, spring(dampingRatio = 0.6f, stiffness = 800f), label = "Create icon")
-                        FloatingActionButton(onClick = { haptic(); addMenuOpen = !addMenuOpen }) {
-                            Icon(Icons.Rounded.Add, contentDescription = if (addMenuOpen) "Close create menu" else "Create", modifier = Modifier.rotate(rotation))
-                        }
-                        QuickCreateMenu(expanded = addMenuOpen, onDismiss = { addMenuOpen = false }) {
-                            listOf(
-                                "Text note" to Icons.Rounded.TextFields,
-                                "Image" to Icons.Rounded.Image,
-                                "Audio" to Icons.Rounded.AudioFile,
-                                "Checklist" to Icons.Rounded.Checklist,
-                                "Drawing" to Icons.Rounded.Draw,
-                                "Reminder" to Icons.Rounded.Notifications,
-                            ).forEach { (label, icon) ->
-                                DropdownMenuItem(
-                                    text = { Text(label) },
-                                    leadingIcon = { Icon(icon, contentDescription = null) },
-                                    onClick = {
-                                        haptic()
-                                        addMenuOpen = false
-                                        when (label) {
-                                            "Text note" -> onCreateNote(null)
-                                            "Image" -> onCreateNote("IMAGE")
-                                            "Audio" -> onCreateNote("AUDIO")
-                                            else -> creationInfo = label
-                                        }
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
+                if (selected == Workspace.Notes) Spacer(Modifier.size(56.dp).onGloballyPositioned {
+                    val p = homeCoordinates?.localPositionOf(it, androidx.compose.ui.geometry.Offset.Zero) ?: androidx.compose.ui.geometry.Offset.Zero
+                    fabPosition = IntOffset(p.x.toInt(), p.y.toInt())
+                })
             },
         ) { padding ->
             Row(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
@@ -217,8 +217,13 @@ fun HomeScreen(
                         }
                     }
                 }
-                when (selected) {
-                    Workspace.Notes -> Column(Modifier.weight(1f)) {
+                AnimatedContent(selected, modifier = Modifier.weight(1f).fillMaxHeight().clipToBounds(), transitionSpec = {
+                    val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                    (slideInHorizontally(tween(320)) { it * direction } togetherWith
+                        slideOutHorizontally(tween(320)) { -it * direction }).using(SizeTransform(clip = true))
+                }, label = "Workspace slide") { workspace ->
+                when (workspace) {
+                    Workspace.Notes -> Column(Modifier.fillMaxSize()) {
                         if (searchActive) FlowRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf("All", "Pinned", "Images", "Audio", "Colored").forEach { kind ->
                                 FilterChip(selected = filter == kind, onClick = { filter = kind; haptic() }, label = { Text(kind) })
@@ -230,6 +235,7 @@ fun HomeScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
                         )
+                        Box(Modifier.fillMaxWidth().weight(1f)) {
                         if (notesState is NotesState.Loading) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                         } else if (notesState is NotesState.Failed) {
@@ -256,14 +262,15 @@ fun HomeScreen(
                                     var origin by remember { mutableStateOf(TransformOrigin.Center) }
                                     val entrance = remember(note.id, note.updatedAt) { Animatable(if (System.currentTimeMillis() - note.updatedAt < 2500) 0.86f else 1f) }
                                     LaunchedEffect(note.id, note.updatedAt) { entrance.animateTo(1f, spring(0.78f, 500f)) }
+                                    val removal = animateFloatAsState(if (removingId == note.id) 0f else 1f, tween(220), label = "Delete note")
                                     OutlinedCard(
                                         modifier = Modifier.animateItem(fadeInSpec = tween(260), placementSpec = spring(0.8f, 380f), fadeOutSpec = tween(200))
-                                            .graphicsLayer { scaleX = entrance.value; scaleY = entrance.value; alpha = ((entrance.value - 0.86f) / 0.14f).coerceIn(0f, 1f) }
+                                            .graphicsLayer { scaleX = entrance.value * (0.82f + 0.18f * removal.value); scaleY = scaleX; alpha = ((entrance.value - 0.86f) / 0.14f).coerceIn(0f, 1f) * removal.value }
                                             .onGloballyPositioned { coordinates ->
                                                 val center = coordinates.boundsInWindow().center
                                                 origin = TransformOrigin((center.x / hostView.width.coerceAtLeast(1)).coerceIn(0f, 1f), (center.y / hostView.height.coerceAtLeast(1)).coerceIn(0f, 1f))
                                             },
-                                        onClick = { onOpenNote(note, origin.pivotFractionX, origin.pivotFractionY) },
+                                        onClick = { if (note.id != removedNote?.id) onOpenNote(note, origin.pivotFractionX, origin.pivotFractionY) },
                                         shape = RoundedCornerShape(16.dp),
                                         colors = CardDefaults.outlinedCardColors(
                                             containerColor = noteBackground(note.color),
@@ -275,11 +282,13 @@ fun HomeScreen(
                                             Text(note.displayTitle, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
                                             val audioCount = note.attachments.count { it.type == AttachmentType.AUDIO }
                                             if (audioCount > 0) Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.AudioFile, null, Modifier.size(20.dp)); Text(" $audioCount audio", style = MaterialTheme.typography.labelMedium) }
-                                            if (note.body.isNotBlank()) Text(note.body, style = MaterialTheme.typography.bodyMedium, maxLines = 12, overflow = TextOverflow.Ellipsis)
+                                            if (note.body.isNotBlank()) Text(note.body, style = MaterialTheme.typography.bodyMedium.copy(letterSpacing = 0.sp), maxLines = 12, overflow = TextOverflow.Ellipsis)
                                         }
                                     }
                                 }
                             }
+                        }
+                        Box(Modifier.fillMaxWidth().height(12.dp).background(Brush.verticalGradient(listOf(MaterialTheme.colorScheme.surface, Color.Transparent))))
                         }
                     }
                     Workspace.Today -> WorkspaceMessage(
@@ -301,10 +310,46 @@ fun HomeScreen(
                         icon = Workspace.Week.icon,
                     )
                 }
+                }
             }
         }
         AnimatedVisibility(addMenuOpen, enter = fadeIn(tween(180)), exit = fadeOut(tween(220))) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.28f)).clickable { addMenuOpen = false })
+        }
+        if (selected == Workspace.Notes) {
+            CreateOverlay(position = { fabPosition.copy(y = fabPosition.y - keyboardOffset()) }) {
+                QuickCreateMenu(expanded = addMenuOpen) {
+                            listOf(
+                                "Text note" to Icons.Rounded.TextFields,
+                                "Image" to Icons.Rounded.Image,
+                                "Audio" to Icons.Rounded.AudioFile,
+                                "Checklist" to Icons.Rounded.Checklist,
+                                "Drawing" to Icons.Rounded.Draw,
+                                "Reminder" to Icons.Rounded.Notifications,
+                            ).forEach { (label, icon) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    leadingIcon = { Icon(icon, contentDescription = null) },
+                                    onClick = {
+                                        haptic()
+                                        addMenuOpen = false
+                                        when (label) {
+                                            "Text note" -> onCreateNote(null)
+                                            "Image" -> onCreateNote("IMAGE")
+                                            "Audio" -> onCreateNote("AUDIO")
+                                            else -> creationInfo = label
+                                        }
+                                    },
+                                )
+                            }
+                }
+                Spacer(Modifier.height(8.dp))
+                val rotation = animateFloatAsState(if (addMenuOpen) 45f else 0f, spring(0.72f, 650f), label = "Create icon")
+                FloatingActionButton(onClick = { haptic(); addMenuOpen = !addMenuOpen }) {
+                    Icon(Icons.Rounded.Add, if (addMenuOpen) "Close create menu" else "Create",
+                        Modifier.graphicsLayer { rotationZ = rotation.value })
+                }
+            }
         }
     }
     if (sortOpen) ModalBottomSheet(onDismissRequest = { sortOpen = false }) {
@@ -340,6 +385,11 @@ private fun HomeTopBar(
     onToggleLayout: () -> Unit,
     onSettingsClick: () -> Unit,
 ) {
+    var greeted by rememberSaveable { mutableStateOf(false) }
+    val greeting = remember { greetingForHour(java.time.LocalTime.now().hour).random() }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(2800); greeted = true }
+    LaunchedEffect(searchActive) { if (searchActive) greeted = true }
+    val greetingVisible = !greeted && !searchActive
     Row(
         Modifier.fillMaxWidth().then(if (bottom) Modifier else Modifier.windowInsetsPadding(WindowInsets.statusBars))
             .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
@@ -355,10 +405,14 @@ private fun HomeTopBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(0.dp),
             ) {
+                AnimatedVisibility(!greetingVisible, enter = fadeIn(tween(240)) + expandHorizontally(tween(300)), exit = fadeOut(tween(160)) + shrinkHorizontally(tween(240))) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                 if (themedLogo) Icon(painterResource(R.drawable.ic_search_mascot), contentDescription = null,
                     modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
                 else Image(painterResource(R.drawable.ic_time_gem_logo), contentDescription = null, modifier = Modifier.size(32.dp))
                 Spacer(Modifier.width(12.dp))
+                }
+                }
                 BasicTextField(
                     value = query,
                     onValueChange = onQueryChange,
@@ -368,11 +422,12 @@ private fun HomeTopBar(
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     decorationBox = { field ->
                         Box {
-                            if (query.isEmpty()) SearchHint(searchActive)
+                            if (query.isEmpty()) SearchHint(greetingVisible, greeting)
                             field()
                         }
                     },
                 )
+                AnimatedVisibility(!greetingVisible, enter = fadeIn(tween(240)) + expandHorizontally(tween(300)), exit = fadeOut(tween(160)) + shrinkHorizontally(tween(240))) {
                 AnimatedContent(query.isNotEmpty() || searchActive, transitionSpec = {
                     (fadeIn(tween(220)) togetherWith fadeOut(tween(160))).using(SizeTransform { _, _ -> spring(0.8f, 380f) })
                 }, label = "Search controls") { active ->
@@ -389,6 +444,7 @@ private fun HomeTopBar(
                         )
                     }
                     IconButton(onClick = onSortClick) { Icon(Icons.Rounded.SwapVert, contentDescription = "Sort notes") }
+                }
                 }
                 }
                 }
@@ -422,58 +478,58 @@ private fun WorkspaceMessage(
 }
 
 @Composable
-private fun QuickCreateMenu(expanded: Boolean, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    val visibility = remember { MutableTransitionState(false) }
-    visibility.targetState = expanded
-    val offset = with(LocalDensity.current) { 64.dp.roundToPx() }
-    if (visibility.currentState || visibility.targetState) {
-        Popup(alignment = Alignment.BottomEnd, offset = IntOffset(0, -offset),
-            onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
-            AnimatedVisibility(visibility,
-                enter = fadeIn(tween(180)) + scaleIn(spring(dampingRatio = 0.8f, stiffness = 380f), initialScale = 0.92f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 1f)),
-                exit = fadeOut(tween(180)) + scaleOut(tween(220), targetScale = 0.9f, transformOrigin = TransformOrigin(1f, 1f))) {
-                Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shadowElevation = 3.dp) {
-                    Column(Modifier.width(208.dp).padding(vertical = 8.dp), content = content)
-                }
-            }
+private fun CreateOverlay(position: () -> IntOffset, content: @Composable ColumnScope.() -> Unit) {
+    Layout(content = { Column(horizontalAlignment = Alignment.End, content = content) }) { measurables, constraints ->
+        val child = measurables.single().measure(constraints.copy(minWidth = 0, minHeight = 0))
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            val anchor = position()
+            child.place(anchor.x + 56.dp.roundToPx() - child.width, anchor.y + 56.dp.roundToPx() - child.height)
         }
     }
 }
 
 @Composable
-private fun SearchHint(searchActive: Boolean) {
-    var greeted by rememberSaveable { mutableStateOf(false) }
-    val greeting = remember {
-        val choices = when (java.time.LocalTime.now().hour) {
-            in 5..11 -> listOf("Good morning", "A fresh start", "Morning, hello")
-            in 12..16 -> listOf("Good afternoon", "Hello there", "A little progress")
-            in 17..21 -> listOf("Good evening", "Time to unwind", "Evening, hello")
-            else -> listOf("Hello, night owl", "A quiet moment", "Take it easy")
+private fun QuickCreateMenu(expanded: Boolean, content: @Composable ColumnScope.() -> Unit) {
+    AnimatedVisibility(expanded,
+        enter = fadeIn(tween(160)) + scaleIn(spring(0.82f, 450f), initialScale = 0.85f, transformOrigin = TransformOrigin(1f, 1f)),
+        exit = fadeOut(tween(160)) + scaleOut(tween(200), targetScale = 0.85f, transformOrigin = TransformOrigin(1f, 1f))) {
+        Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh, shadowElevation = 3.dp) {
+            Column(Modifier.width(208.dp).padding(vertical = 8.dp), content = content)
         }
-        choices.random()
     }
-    LaunchedEffect(Unit) { kotlinx.coroutines.delay(2200); greeted = true }
+}
+
+internal fun greetingForHour(hour: Int): List<String> = when (hour) {
+    in 5..11 -> listOf("Good morning", "A fresh page awaits", "Hello, new day", "Start with one idea", "Make room for today", "Morning, take your time", "What's on your mind?", "A little morning clarity", "Your day, your pace", "One thing at a time")
+    in 12..16 -> listOf("Good afternoon", "How's your day going?", "Room for another idea", "A moment to regroup", "Keep your ideas close", "A little progress counts", "Pick up where you left off", "Pause, then carry on", "Make space to think", "Hello again")
+    in 17..21 -> listOf("Good evening", "How did today go?", "Save a thought for later", "A little time for you", "Ease into the evening", "Tomorrow can wait", "Catch those last ideas", "Take a quiet moment", "Let the day settle", "One less thing to remember")
+    else -> listOf("Hello, night owl", "A quiet space to think", "Save it for tomorrow", "Rest when you're ready", "A thought before sleep", "Keep it for the morning", "The ideas can wait here", "Take it easy tonight", "A little peace and quiet", "Leave tomorrow a note")
+}
+
+@Composable
+private fun SearchHint(showGreeting: Boolean, greeting: String) {
     BoxWithConstraints {
         val measurer = androidx.compose.ui.text.rememberTextMeasurer()
         val pixels = with(LocalDensity.current) { maxWidth.toPx() }
         val base = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-        val candidates = listOf(78f, 65f, 50f).map { width ->
-            buildAnnotatedString {
-                append("Search ")
-                withStyle(com.dragonpi.timegem.ui.theme.timeGemWordmark(width).toSpanStyle()) { append("Time Gem") }
-            }
-        }
-        val label = candidates.firstOrNull { measurer.measure(it, base, maxLines = 1).size.width <= pixels }
-            ?: buildAnnotatedString { withStyle(com.dragonpi.timegem.ui.theme.timeGemWordmark(50f).toSpanStyle()) { append("Time Gem") } }
-        LaunchedEffect(searchActive) { if (searchActive) greeted = true }
-        val showGreeting = !greeted && !searchActive && measurer.measure(greeting, base, maxLines = 1).size.width <= pixels
+        val brandStyle = remember(base) { com.dragonpi.timegem.ui.theme.TimeGemWordmark.copy(color = base.color, textMotion = androidx.compose.ui.text.style.TextMotion.Animated) }
+        val prefixWidth = remember(base, measurer) { measurer.measure("Search ", base, maxLines = 1).size.width.toFloat() }
+        val brandWidth = remember(brandStyle, measurer) { measurer.measure("Time Gem", brandStyle, maxLines = 1).size.width.toFloat() }
+        val targetScale = ((pixels - prefixWidth) / brandWidth).coerceIn(0.5f, 1f)
+        val brandScale = animateFloatAsState(targetScale, tween(280), label = "Wordmark width")
         AnimatedContent(showGreeting, transitionSpec = {
-            (fadeIn(tween(320)) + slideInVertically(tween(320)) { it / 3 }) togetherWith
-                (fadeOut(tween(220)) + slideOutVertically(tween(280)) { -it / 3 })
+            (fadeIn(tween(280)) + slideInVertically(tween(300)) { it / 3 }) togetherWith
+                (fadeOut(tween(180)) + slideOutVertically(tween(240)) { -it / 3 })
         }, label = "Search greeting") { showing ->
-            if (showing) Text(greeting, style = base, maxLines = 1)
-            else Text(label, style = base, maxLines = 1, softWrap = false)
+            if (showing) Text(greeting, style = base, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            else Row {
+                Text("Search ", style = base, maxLines = 1, softWrap = false)
+                Text("Time Gem", style = brandStyle, maxLines = 1, softWrap = false,
+                    modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true).graphicsLayer {
+                        scaleX = brandScale.value
+                        transformOrigin = TransformOrigin(0f, 0.5f)
+                    })
+            }
         }
     }
 }
