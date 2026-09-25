@@ -94,14 +94,7 @@ fun TimeGemTheme(
         }
     }
 
-    val colorScheme = when {
-        appearance.source == ColorSource.WALLPAPER && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        appearance.source == ColorSource.PRESET -> presetColorScheme(appearance.palette, darkTheme)
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
+    val colorScheme = timeGemColorScheme(context, appearance, darkTheme)
 
     MaterialTheme(
         colorScheme = colorScheme,
@@ -115,3 +108,12 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is ContextWrapper -> baseContext.findActivity()
     else -> null
 }
+
+fun timeGemColorScheme(context: Context, appearance: Appearance, darkTheme: Boolean): androidx.compose.material3.ColorScheme = when {
+        appearance.source == ColorSource.WALLPAPER && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+        appearance.source == ColorSource.PRESET -> presetColorScheme(appearance.palette, darkTheme)
+        darkTheme -> DarkColorScheme
+        else -> LightColorScheme
+    }

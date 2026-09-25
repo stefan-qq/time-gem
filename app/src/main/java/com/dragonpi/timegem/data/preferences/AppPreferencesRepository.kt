@@ -27,8 +27,12 @@ data class InteractionOptions(
     val themedLogo: Boolean = true,
 )
 
+enum class NoteSort(val label: String) { MODIFIED("Date modified"), CREATED("Date created"), TITLE("Title A to Z") }
+
 data class HomeOptions(
     val gridLayout: Boolean = true,
+    val bottomSearch: Boolean = false,
+    val sort: NoteSort = NoteSort.MODIFIED,
     val showToday: Boolean = true,
     val showCalendar: Boolean = true,
     val showWeek: Boolean = true,
@@ -39,6 +43,7 @@ data class SetupChoices(
     val routinesEnabled: Boolean,
     val wellbeingEnabled: Boolean,
     val reflectionsEnabled: Boolean,
+    val bottomSearch: Boolean = false,
 )
 
 class AppPreferencesRepository(
@@ -55,6 +60,8 @@ class AppPreferencesRepository(
         val colorSource = stringPreferencesKey("color_source")
         val palette = stringPreferencesKey("color_palette")
         val gridLayout = booleanPreferencesKey("home_grid_layout")
+        val bottomSearch = booleanPreferencesKey("bottom_search")
+        val sort = stringPreferencesKey("note_sort")
         val showToday = booleanPreferencesKey("home_show_today")
         val showCalendar = booleanPreferencesKey("home_show_calendar")
         val showWeek = booleanPreferencesKey("home_show_week")
@@ -83,6 +90,8 @@ class AppPreferencesRepository(
             ),
             homeOptions = HomeOptions(
                 gridLayout = values[Keys.gridLayout] ?: true,
+                bottomSearch = values[Keys.bottomSearch] ?: false,
+                sort = NoteSort.entries.firstOrNull { it.name == values[Keys.sort] } ?: NoteSort.MODIFIED,
                 showToday = values[Keys.showToday] ?: true,
                 showCalendar = values[Keys.showCalendar] ?: (values[Keys.calendarEnabled] ?: true),
                 showWeek = values[Keys.showWeek] ?: true,
@@ -99,6 +108,7 @@ class AppPreferencesRepository(
             values[Keys.showToday] = choices.routinesEnabled || choices.wellbeingEnabled
             values[Keys.showCalendar] = choices.calendarEnabled
             values[Keys.showWeek] = choices.reflectionsEnabled
+            values[Keys.bottomSearch] = choices.bottomSearch
             values[Keys.setupCompleted] = true
         }
     }
@@ -109,6 +119,7 @@ class AppPreferencesRepository(
             values[Keys.colorSource] = appearance.source.name
             values[Keys.palette] = appearance.palette.name
         }
+        com.dragonpi.timegem.widget.QuickCaptureWidget.refresh(context)
     }
 
     suspend fun updateFeatures(routines: Boolean, wellbeing: Boolean, reflections: Boolean) {
@@ -125,11 +136,14 @@ class AppPreferencesRepository(
             values[Keys.haptics] = options.haptics
             values[Keys.themedLogo] = options.themedLogo
         }
+        com.dragonpi.timegem.widget.QuickCaptureWidget.refresh(context)
     }
 
     suspend fun updateHomeOptions(options: HomeOptions) {
         context.timeGemDataStore.edit { values ->
+            values[Keys.bottomSearch] = options.bottomSearch
             values[Keys.gridLayout] = options.gridLayout
+            values[Keys.sort] = options.sort.name
             values[Keys.showToday] = options.showToday
             values[Keys.showCalendar] = options.showCalendar
             values[Keys.showWeek] = options.showWeek

@@ -1,0 +1,10 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/widget_root" android:layout_width="match_parent" android:layout_height="match_parent">
+    <ImageView android:id="@+id/widget_background" android:layout_width="match_parent" android:layout_height="match_parent" android:src="@drawable/widget_background" android:scaleType="fitXY" android:importantForAccessibility="no" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="16dp">
+        <ImageView android:id="@+id/widget_mascot" android:layout_width="32dp" android:layout_height="32dp" android:src="@drawable/ic_time_gem_logo" android:importantForAccessibility="no" />
+        <TextView android:id="@+id/widget_note_title" android:text="Your latest note" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:textSize="18sp" android:textStyle="bold" android:maxLines="2" android:ellipsize="end" />
+        <ImageView android:id="@+id/widget_note_image" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:layout_marginTop="8dp" android:scaleType="fitCenter" android:visibility="gone" android:contentDescription="Note image" />
+        <TextView android:id="@+id/widget_note_body" android:text="Keep an idea within reach." android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:layout_marginTop="8dp" android:textSize="14sp" android:ellipsize="end" />
+        <TextView android:id="@+id/widget_hint" android:text="Pinned notes appear first" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:layout_marginTop="8dp" />
+    </LinearLayout>
+</FrameLayout>

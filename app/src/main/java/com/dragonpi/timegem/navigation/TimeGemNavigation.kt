@@ -19,6 +19,9 @@ import com.dragonpi.timegem.feature.placeholder.PlaceholderFeatureScreen
 import com.dragonpi.timegem.feature.settings.SettingsScreen
 import com.dragonpi.timegem.feature.notes.*
 import java.util.UUID
+import kotlinx.coroutines.flow.collectLatest
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun TimeGemNavigation(
@@ -28,7 +31,10 @@ fun TimeGemNavigation(
     onFeaturesChange: (Boolean, Boolean, Boolean) -> Unit,
     notesViewModel: NotesViewModel,
     onInteractionsChange: (InteractionOptions) -> Unit,
+    newNoteRequest: String? = null,
+    onNewNoteHandled: () -> Unit = {},
 ) {
+    var noteOrigin by remember { mutableStateOf(androidx.compose.ui.graphics.TransformOrigin.Center) }
     val backStack = rememberNavBackStack(HomeDestination)
     val notesState by notesViewModel.state.collectAsStateWithLifecycle()
     val saving by notesViewModel.saving.collectAsStateWithLifecycle()
@@ -37,20 +43,31 @@ fun TimeGemNavigation(
     fun open(destination: NavKey) {
         if (backStack.lastOrNull() != destination) backStack.add(destination)
     }
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(notesViewModel) { notesViewModel.messages.collectLatest { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(it) } }
+    LaunchedEffect(newNoteRequest, saving) {
+        if (newNoteRequest != null && !saving) {
+            val parts = newNoteRequest.split(":")
+            if (parts.first() == "NOTE" && parts.size >= 2) open(NoteDestination(parts[1]))
+            else open(NoteDestination(UUID.randomUUID().toString(), true, parts.first().takeIf { it == "IMAGE" || it == "AUDIO" }))
+            onNewNoteHandled()
+        }
+    }
+    Box(Modifier.fillMaxSize()) {
     NavDisplay(
         backStack = backStack,
         onBack = { if (!saving) back() },
-        transitionSpec = { (fadeIn(tween(130)) + slideInHorizontally(tween(160)) { it / 24 }) togetherWith ExitTransition.None },
-        popTransitionSpec = { EnterTransition.None togetherWith (fadeOut(tween(110)) + slideOutHorizontally(tween(140)) { it / 24 }) },
-        predictivePopTransitionSpec = { _ -> EnterTransition.None togetherWith (fadeOut(tween(140)) + slideOutHorizontally(tween(140)) { it / 24 }) },
+        transitionSpec = { (fadeIn(tween(230)) + scaleIn(tween(300), initialScale = 0.88f, transformOrigin = noteOrigin)) togetherWith ExitTransition.None },
+        popTransitionSpec = { EnterTransition.None togetherWith (fadeOut(tween(210)) + scaleOut(tween(280), targetScale = 0.88f, transformOrigin = noteOrigin)) },
+        predictivePopTransitionSpec = { _ -> EnterTransition.None togetherWith (fadeOut(tween(210)) + scaleOut(tween(280), targetScale = 0.88f, transformOrigin = noteOrigin)) },
         entryProvider = entryProvider {
             entry<HomeDestination> {
                 HomeScreen(
                     preferences = preferences,
                     notesState = notesState,
                     onRetry = notesViewModel::reload,
-                    onCreateNote = { notesViewModel.clearError(); open(NoteDestination(UUID.randomUUID().toString(), true)) },
-                    onOpenNote = { notesViewModel.clearError(); open(NoteDestination(it.id)) },
+                    onCreateNote = { type -> noteOrigin = androidx.compose.ui.graphics.TransformOrigin(0.9f, 0.9f); notesViewModel.clearError(); open(NoteDestination(UUID.randomUUID().toString(), true, type)) },
+                    onOpenNote = { note, x, y -> noteOrigin = androidx.compose.ui.graphics.TransformOrigin(x, y); notesViewModel.clearError(); open(NoteDestination(note.id)) },
                     onSettingsClick = { open(SettingsDestination) },
                     onHomeOptionsChange = onHomeOptionsChange,
                     onRoutinesClick = { open(RoutinesDestination) },
@@ -71,6 +88,7 @@ fun TimeGemNavigation(
                     NoteEditorScreen(
                         note = note,
                         isNew = destination.isNew,
+                        initialAttachmentType = destination.attachmentType,
                         saving = saving,
                         error = noteError,
                         askBeforeSaving = preferences.interactions.askBeforeSaving,
@@ -100,4 +118,7 @@ fun TimeGemNavigation(
             }
         },
     )
+    com.dragonpi.timegem.ui.DismissibleFeedback(snackbar,
+        Modifier.align(Alignment.BottomCenter).navigationBarsPadding().imePadding().padding(16.dp))
+    }
 }

@@ -1,3 +1,6 @@
 <resources>
     <string name="app_name">Time Gem</string>
+    <string name="widget_hint">Capture an idea</string>
+    <string name="widget_new">+ New note</string>
+    <string name="widget_description">Open Time Gem or start writing from your home screen.</string>
 </resources>

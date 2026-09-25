@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import com.dragonpi.timegem.ui.rememberGentleHaptic
 import androidx.compose.ui.Alignment
@@ -26,6 +27,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onInteractionsChange: (InteractionOptions) -> Unit,
 ) {
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val options = preferences.homeOptions
     val interactions = preferences.interactions
     val context = LocalContext.current
@@ -40,6 +43,7 @@ fun SettingsScreen(
         )
     }
     Scaffold(
+        snackbarHost = { com.dragonpi.timegem.ui.DismissibleFeedback(snackbar) },
         topBar = { TopAppBar(title = { Text("Settings") }, navigationIcon = {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
         }) },
@@ -51,7 +55,7 @@ fun SettingsScreen(
             ) {
                 Text("Appearance", style = MaterialTheme.typography.headlineSmall)
                 AppearanceControls(preferences.appearance, onAppearanceChange)
-                SettingSwitch("Themed search logo", "Match the search logo to wallpaper and custom colors. Time Gem keeps its original logo.", interactions.themedLogo) {
+                SettingSwitch("Material You mascot", "Use theme colors for the mascot throughout the app and widgets. The Time Gem palette keeps its original colors.", interactions.themedLogo) {
                     onInteractionsChange(interactions.copy(themedLogo = it))
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -64,6 +68,17 @@ fun SettingsScreen(
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Text("Home", style = MaterialTheme.typography.headlineSmall)
+                OutlinedButton(onClick = {
+                    val manager = android.appwidget.AppWidgetManager.getInstance(context)
+                    if (manager.isRequestPinAppWidgetSupported) manager.requestPinAppWidget(android.content.ComponentName(context, com.dragonpi.timegem.widget.QuickCaptureWidget::class.java), null, null)
+                    else scope.launch { snackbar.showSnackbar("Add Time Gem from your launcher's Widgets menu.") }
+                }) { Text("Add quick capture widget") }
+                OutlinedButton(onClick = {
+                    val manager = android.appwidget.AppWidgetManager.getInstance(context)
+                    if (manager.isRequestPinAppWidgetSupported) manager.requestPinAppWidget(android.content.ComponentName(context, com.dragonpi.timegem.widget.NoteWidget::class.java), null, null)
+                    else scope.launch { snackbar.showSnackbar("Add Time Gem from your launcher's Widgets menu.") }
+                }) { Text("Add latest note widget") }
+                SettingSwitch("Search at the bottom", "Keep search close to your thumb, above the workspace bar.", options.bottomSearch) { onHomeOptionsChange(options.copy(bottomSearch = it)) }
                 SettingSwitch("Note grid", "Turn off for a single list.", options.gridLayout) { onHomeOptionsChange(options.copy(gridLayout = it)) }
                 Text("Workspaces", style = MaterialTheme.typography.titleMedium)
                 Text("Notes always stays visible.", style = MaterialTheme.typography.bodyMedium)

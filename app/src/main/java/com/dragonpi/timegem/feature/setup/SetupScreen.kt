@@ -30,6 +30,7 @@ fun SetupScreen(
     saving: Boolean,
     onFinish: (SetupChoices) -> Unit,
 ) {
+    var bottomSearch by rememberSaveable { mutableStateOf(false) }
     var step by rememberSaveable { mutableIntStateOf(0) }
     var calendar by rememberSaveable { mutableStateOf(true) }
     var routines by rememberSaveable { mutableStateOf(true) }
@@ -52,7 +53,7 @@ fun SetupScreen(
                         Button(
                             onClick = {
                                 if (step == 0) step = 1
-                                else onFinish(SetupChoices(calendar, routines, wellbeing, reflections))
+                                else onFinish(SetupChoices(calendar, routines, wellbeing, reflections, bottomSearch))
                             },
                             enabled = !saving,
                             modifier = Modifier.weight(1f).heightIn(min = 52.dp),
@@ -75,8 +76,10 @@ fun SetupScreen(
                     Text(if (page == 0) "1 of 2 · Your space" else "2 of 2 · Appearance", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     LinearProgressIndicator(progress = { if (page == 0) 0.5f else 1f }, modifier = Modifier.fillMaxWidth())
                     if (page == 0) {
-                        Image(painterResource(R.drawable.ic_time_gem_logo), contentDescription = null, modifier = Modifier.size(64.dp))
-                        Text("Make Time Gem yours", style = MaterialTheme.typography.headlineMedium)
+                        if (appearance.source != ColorSource.TIME_GEM) Icon(painterResource(R.drawable.ic_search_mascot), contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
+                        else Image(painterResource(R.drawable.ic_time_gem_logo), contentDescription = null, modifier = Modifier.size(64.dp))
+                        Text("Time Gem", style = com.dragonpi.timegem.ui.theme.TimeGemWordmark.copy(fontSize = MaterialTheme.typography.headlineMedium.fontSize))
+                        Text("Make it yours", style = MaterialTheme.typography.headlineSmall)
                         Text("Start with notes. Choose which other spaces you want to see.", style = MaterialTheme.typography.bodyLarge)
                         Text("The extra tools are still being built. You can change these choices in Settings.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Column {
@@ -93,6 +96,7 @@ fun SetupScreen(
                         Text("Find your colors", style = MaterialTheme.typography.headlineMedium)
                         Text("Preview your theme here. Change it anytime in Settings.", style = MaterialTheme.typography.bodyLarge)
                         AppearanceControls(appearance, onAppearanceChange)
+                        SettingSwitch("Search at the bottom", "Keep search close to your thumb.", bottomSearch) { bottomSearch = it }
                         HorizontalDivider()
                         Text("Your space, on your device", style = MaterialTheme.typography.titleMedium)
                         Text("No account needed. Notes and preferences are saved locally.", style = MaterialTheme.typography.bodyMedium)

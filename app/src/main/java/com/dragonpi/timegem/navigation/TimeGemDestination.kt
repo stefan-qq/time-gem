@@ -19,4 +19,4 @@ data object WellbeingDestination : NavKey
 data object SettingsDestination : NavKey
 
 @Serializable
-data class NoteDestination(val id: String, val isNew: Boolean = false) : NavKey
+data class NoteDestination(val id: String, val isNew: Boolean = false, val attachmentType: String? = null) : NavKey

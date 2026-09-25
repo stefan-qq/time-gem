@@ -26,7 +26,7 @@ class SetupScreenTest {
                 }
             }
         }
-        val heading = compose.onNodeWithText("Make Time Gem yours").fetchSemanticsNode().boundsInRoot
+        val heading = compose.onNodeWithText("Make it yours").fetchSemanticsNode().boundsInRoot
         val calendar = compose.onNodeWithText("Calendar", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertTrue("The feature rows must start below the heading", calendar.top >= heading.bottom)
         compose.onNodeWithText("Continue").performClick()
@@ -34,6 +34,6 @@ class SetupScreenTest {
         compose.onNodeWithText("Light", useUnmergedTree = true).performClick()
         compose.onNodeWithText("Find your colors").assertIsDisplayed()
         compose.onNodeWithContentDescription("Back").performClick()
-        compose.onNodeWithText("Make Time Gem yours").assertIsDisplayed()
+        compose.onNodeWithText("Make it yours").assertIsDisplayed()
     }
 }

@@ -7,6 +7,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.ExperimentalTextApi
 import com.dragonpi.timegem.R
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.sp
 
 @OptIn(ExperimentalTextApi::class)
 private val GoogleSansFlex = FontFamily(
@@ -34,3 +36,12 @@ val Typography = Typography(
     labelMedium = defaults.labelMedium.copy(fontFamily = GoogleSansFlex),
     labelSmall = defaults.labelSmall.copy(fontFamily = GoogleSansFlex),
 )
+
+@OptIn(ExperimentalTextApi::class)
+fun timeGemWordmark(width: Float = 78f) = TextStyle(
+    fontFamily = FontFamily(Font(R.font.google_sans_flex, FontWeight.Bold,
+        variationSettings = FontVariation.Settings(FontVariation.weight(700), FontVariation.width(width), FontVariation.Setting("ROND", 100f)))),
+    fontWeight = FontWeight.Bold, fontSize = 17.sp, letterSpacing = 0.sp,
+)
+
+val TimeGemWordmark = timeGemWordmark()

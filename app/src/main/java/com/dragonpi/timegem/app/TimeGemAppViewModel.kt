@@ -15,11 +15,13 @@ import com.dragonpi.timegem.data.preferences.TimeGemPreferences
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 sealed interface TimeGemAppUiState {
     data object Loading : TimeGemAppUiState
+    data object Failed : TimeGemAppUiState
     data class Ready(val preferences: TimeGemPreferences) : TimeGemAppUiState
 }
 
@@ -29,6 +31,7 @@ class TimeGemAppViewModel(
 
     val uiState: StateFlow<TimeGemAppUiState> = preferencesRepository.preferences
         .map<TimeGemPreferences, TimeGemAppUiState> { TimeGemAppUiState.Ready(it) }
+        .catch { emit(TimeGemAppUiState.Failed) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
